@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signInWithPopup, type User } from "firebase/auth";
-import { scaleLinear } from "d3";
 import { auth, googleProvider } from "./firebase";
 import SeatGrid, { type SeatLeader } from "./components/SeatGrid";
 import SeatCandidatesPage, { getPartyLogoForLabel, normalizePartyText } from "./components/SeatCandidatesPage";
@@ -13,11 +12,9 @@ import {
   districts,
   parties,
   seats as seedSeats,
-  voters as seedVoters,
   type Candidate,
   type Party,
   type Seat,
-  type Voter,
   type District,
 } from "./data/mock";
 
@@ -37,13 +34,23 @@ type PartyInfo = {
 };
 
 const totalSeats = 300;
-const turnoutScale = scaleLinear().domain([0, 100]).range([0, 100]).clamp(true);
 const partyPalette = ["#2f6fed", "#f97316", "#22c55e", "#94a3b8", "#a855f7", "#0ea5e9", "#f59e0b", "#14b8a6"];
 const normalizePartyId = (value: string) =>
   value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+const partyColorOverrides = new Map<string, string>([
+  [normalizePartyText("বাংলাদেশ জাতীয়তাবাদী দল - বি.এন.পি"), "#2f6fed"],
+  [normalizePartyText("বিএনপি"), "#2f6fed"],
+  [normalizePartyText("বাংলাদেশজাতীয়তাবাদীদল"), "#2f6fed"],
+  [normalizePartyText("জাতীয় নাগরিক পার্টি-এনসিপি"), "#a855f7"],
+  [normalizePartyText("এনসিপি"), "#a855f7"],
+  [normalizePartyText("জাতীয়নাগরিকপার্টি"), "#a855f7"],
+]);
+
+const getPartyColorOverride = (name: string) => partyColorOverrides.get(normalizePartyText(name));
 
 const buildSeatLeaders = (candidateList: Candidate[]): Map<number, SeatLeader> => {
   const group = new Map<number, Candidate[]>();
@@ -258,7 +265,6 @@ function App() {
   const [candidates, setCandidates] = useState<Candidate[]>(
     seedCandidates.map((candidate) => ({ ...candidate, votes: 0 }))
   );
-  const [voters, setVoters] = useState<Voter[]>(seedVoters);
   const [seats] = useState<Seat[]>(seedSeats);
   const [uiSeats, setUiSeats] = useState<Seat[]>(seedSeats);
   const [districtsLive, setDistrictsLive] = useState<District[]>([]);
@@ -475,6 +481,13 @@ function App() {
   const seatSourceForDetails = isLiveData ? uiSeats : seats;
   const selectedSeat = seatSourceForDetails.find((seat) => seat.id === selectedSeatId) ?? null;
   const hoveredSeat = seatGrid.find((seat) => seat.id === hoveredSeatId) ?? null;
+  const hoveredSeatName = hoveredSeatId
+    ? hoveredSeatId <= 12
+      ? `Seat ${hoveredSeatId}`
+      : isLiveData
+        ? hoveredSeat?.name
+        : `Seat ${hoveredSeatId}`
+    : null;
   const candidatesInSeat = useMemo(() => {
     if (!selectedSeatId) return [];
     return candidates
@@ -616,7 +629,7 @@ function App() {
       names.map((name, index) => ({
         id: normalizePartyId(name),
         name,
-        color: partyPalette[index % partyPalette.length],
+        color: getPartyColorOverride(name) ?? partyPalette[index % partyPalette.length],
       }));
     const loadParties = async () => {
       const urls = [
@@ -891,12 +904,6 @@ function App() {
     setHasVotedWithGoogle(true);
   };
 
-  const handleOpenVote = (candidateId: string) => {
-    setVoteModal({ open: true, candidateId });
-    setFormError(null);
-    setFormSuccess(null);
-    setAuthError(null);
-  };
 
   const handleConfirmVote = () => {
     setFormError(null);
@@ -1281,7 +1288,7 @@ function App() {
           <div className="absolute left-4 top-4 rounded-xl border border-slate-800 bg-slate-900/90 p-3 text-xs text-slate-300">
             <div className="text-[10px] uppercase text-slate-500">Hovered Seat</div>
             <div className="mt-1 text-sm font-semibold text-slate-100">
-              {hoveredSeat?.name ?? "Hover a seat"}
+              {hoveredSeatName ?? "Hover a seat"}
             </div>
             <div className="mt-1 text-[11px] text-slate-400">
               Party: {hoveredPartyLabel ?? "—"}

@@ -142,8 +142,19 @@ export default function InteractiveSvgMap({
         })
         .filter((item): item is { value: string; x: number; y: number } => Boolean(item));
 
-           const findNearestLabel = (shape: SVGGraphicsElement): string | null => {
+          const isPointInside = (shape: SVGGraphicsElement, x: number, y: number) => {
+            const geometry = shape as unknown as SVGGeometryElement;
+            if (typeof geometry.isPointInFill !== "function") return false;
+            const point = svg.createSVGPoint();
+            point.x = x;
+            point.y = y;
+            return geometry.isPointInFill(point);
+          };
+
+          const findNearestLabel = (shape: SVGGraphicsElement): string | null => {
         if (seatLabels.length === 0) return null;
+            const insideLabel = seatLabels.find((label) => isPointInside(shape, label.x, label.y));
+            if (insideLabel) return insideLabel.value;
         const box = shape.getBBox();
         const cx = box.x + box.width / 2;
         const cy = box.y + box.height / 2;
