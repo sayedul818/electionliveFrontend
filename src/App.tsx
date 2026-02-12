@@ -744,70 +744,39 @@ function App() {
   }, [adminDistrictId, adminDivisionId, isLiveData]);
 
   useEffect(() => {
-    if (!selectedSeatId || !selectedDistrictId || !isLiveData) return;
+    if (!selectedSeatId) {
+      setCandidates([]);
+      return;
+    }
     const controller = new AbortController();
-    const parseCandidatesFromHtml = (text: string, seatId: number): Candidate[] => {
-      const rawHtml = text.trim().startsWith("\"") ? JSON.parse(text) : text;
-      const sanitizedHtml = rawHtml.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
-      const decodedHtml = sanitizedHtml.includes("\\u003c")
-        ? sanitizedHtml
-            .replace(/\\u003c/g, "<")
-            .replace(/\\u003e/g, ">")
-            .replace(/\\u0026amp;/g, "&amp;")
-            .replace(/\\n/g, "\n")
-            .replace(/\\t/g, "\t")
-        : sanitizedHtml;
-      const wrappedHtml = `<table>${decodedHtml}</table>`;
-      const doc = new DOMParser().parseFromString(wrappedHtml, "text/html");
-      const rows = Array.from(doc.querySelectorAll("tr"));
-      return rows
-        .map((row, index) => {
-          const cells = row.querySelectorAll("td");
-          const name = cells[0]?.textContent?.trim();
-          if (!name) return null;
-          const imageUrl = cells[1]?.querySelector("img")?.getAttribute("src") ?? undefined;
-          const partyLabel = cells[2]?.textContent?.trim() ?? "Independent";
-          const symbolCell = cells[3];
-          const symbolLabel = symbolCell?.textContent?.trim() ?? "";
-          const symbolImageUrl = symbolCell?.querySelector("img")?.getAttribute("src") ?? undefined;
-          return {
-            id: `live-${seatId}-${index}`,
-            name,
-            partyId: "IND",
-            seatId: Number(seatId),
-            symbol: symbolLabel || "—",
-            votes: 0,
-            imageUrl,
-            partyLabel,
-            symbolLabel,
-            symbolImageUrl,
-          } as Candidate;
-        })
-        .filter((item): item is Candidate => Boolean(item));
-    };
     const loadCandidates = async () => {
       try {
         const response = await fetch(
-          `/api/get/candidate/data?zilla_id=${selectedDistrictId}&candidate_type=1&election_id=478&constituency_id=${selectedSeatId}&ward_id=&status_id=11`,
-          { signal: controller.signal, credentials: "include" }
+          `${apiBase}/seats/${selectedSeatId}/candidates`,
+          { signal: controller.signal }
         );
-        const text = await response.text();
-        const parsed = parseCandidatesFromHtml(text, selectedSeatId);
-        if (parsed.length > 0) {
-          setCandidates(parsed);
-          setLiveUpdate(`Live candidate list loaded (${parsed.length}).`);
-          setDataNote(`Live candidates for seat ${selectedSeatId} loaded.`);
+        if (!response.ok) throw new Error("Failed to load candidates");
+        const data = (await response.json()) as Candidate[];
+        const normalized = data.map((candidate) => ({
+          ...candidate,
+          id: (candidate as { _id?: string })._id ?? candidate.id,
+        }));
+        if (normalized.length > 0) {
+          setCandidates(normalized);
+          setLiveUpdate(`Loaded ${normalized.length} candidates with votes from database`);
+          setDataNote(`Seat ${selectedSeatId}: Showing live data from MongoDB`);
         } else {
-          setDataNote("No candidates returned for this seat.");
+          setCandidates(seedCandidates.filter((candidate) => candidate.seatId === selectedSeatId));
+          setDataNote(`Seat ${selectedSeatId}: No data in database, using mock data`);
         }
       } catch (error) {
         setCandidates(seedCandidates.filter((candidate) => candidate.seatId === selectedSeatId));
-        setDataNote("Using mock candidates (live candidate API failed)." );
+        setDataNote("Backend API unavailable, using mock data");
       }
     };
     loadCandidates();
     return () => controller.abort();
-  }, [selectedSeatId, selectedDistrictId, isLiveData]);
+  }, [selectedSeatId, apiBase]);
 
   useEffect(() => {
     if (!adminSeatId || !adminDistrictId) {

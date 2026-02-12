@@ -205,19 +205,6 @@ const getPartyLogoForCandidate = (candidate: Candidate, partyLookup: Map<string,
   return getPartyLogoForLabel(label);
 };
 
-const resolvePartyKey = (candidate: Candidate, partyLookup: Map<string, Party>) => {
-  if (candidate.partyId === "A") return "bnp";
-  if (candidate.partyId === "B") return "jamaat";
-  if (candidate.partyId === "IND") return "ncp";
-  const rawLabel = candidate.partyLabel ?? partyLookup.get(candidate.partyId)?.name ?? "";
-  const label = normalizePartyText(rawLabel);
-  if (/(বিএনপি|bnp|জাতীয়তাবাদী|nationalist)/i.test(label)) return "bnp";
-  if (/(এনসিপি|ncp|নাগরিক|citizen)/i.test(label)) return "ncp";
-  if (/(জামায়াত|জামায়াত|jamaat|jamaateislami)/i.test(label)) return "jamaat";
-  if (/(ইসলামীআন্দোলনবাংলাদেশ|islamicmovementofbangladesh|iab)/i.test(label)) return "iab";
-  if (/(বাংলাদেশখেলাফতমজলিস|khelafatmajlis)/i.test(label)) return "khm";
-  return "other";
-};
 
 const pickTopByVotes = (items: Candidate[]) =>
   [...items].sort((a, b) => b.votes - a.votes);
@@ -232,40 +219,9 @@ export default function SeatCandidatesPage({
   onBack,
 }: SeatCandidatesPageProps) {
   const ordered = pickTopByVotes(candidates);
-  const topByParty = new Map<string, Candidate>();
-  ordered.forEach((candidate) => {
-    const key = resolvePartyKey(candidate, partyLookup);
-    if (!topByParty.has(key)) {
-      topByParty.set(key, candidate);
-    }
-  });
-
-  const featured: Candidate[] = (() => {
-    const picked: Candidate[] = [];
-    const primaryKeys = ["bnp", "jamaat"];
-    const fallbackKeys = ["ncp", "iab", "khm"];
-
-    for (const key of primaryKeys) {
-      const candidate = topByParty.get(key);
-      if (candidate) picked.push(candidate);
-    }
-
-    if (picked.length < 2) {
-      for (const key of fallbackKeys) {
-        const candidate = topByParty.get(key);
-        if (candidate && !picked.includes(candidate)) {
-          picked.push(candidate);
-        }
-        if (picked.length === 2) break;
-      }
-    }
-
-    if (picked.length < 2) {
-      const fallback = ordered.filter((candidate) => !picked.includes(candidate));
-      picked.push(...fallback.slice(0, 2 - picked.length));
-    }
-    return picked;
-  })();
+  
+  // Show top 2 candidates by vote count
+  const featured: Candidate[] = ordered.slice(0, 2);
 
   const featuredIds = new Set(featured.map((candidate) => candidate.id));
   const remainingCandidates = ordered.filter((candidate) => !featuredIds.has(candidate.id));
@@ -300,8 +256,8 @@ export default function SeatCandidatesPage({
             </button>
           </div>
         </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {featured.map((candidate) => {
+        <div className="mt-6 grid gap-4">
+          {featured.map((candidate, index) => {
             const partyLabel = getPartyLabel(candidate, partyLookup);
             const symbolLabel = candidate.symbolLabel ?? candidate.symbol ?? "—";
             const symbolImage =
@@ -314,6 +270,7 @@ export default function SeatCandidatesPage({
               .join("");
             const candidateImage = normalizeCandidateImage(candidate.imageUrl);
             const partyColor = getPartyColor(candidate, partyLookup, partyRoster);
+            const position = index === 0 ? "🥇 Leading" : "🥈 Runner-up";
             return (
               <div
                 key={candidate.id}
@@ -337,6 +294,7 @@ export default function SeatCandidatesPage({
                     </div>
                   )}
                   <div>
+                    <div className="text-xs font-medium text-slate-500">{position}</div>
                     <div className="text-base font-semibold text-slate-900">{candidate.name}</div>
                     <div className="text-sm text-slate-600">{partyLabel}</div>
                     <div className="mt-1 text-xs text-slate-500">ভোট {formatVotes(candidate.votes)}</div>
