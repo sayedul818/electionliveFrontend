@@ -1450,7 +1450,7 @@ function App() {
                   : "text-slate-300 hover:text-slate-100"
               }`}
             >
-              Live voting
+              Voting Result (Seat wise)
             </button>
           </div>
         </div>
